@@ -33,8 +33,14 @@ OGURI_CAP_GROWTH_BONUS = {
     "wisdom": 0,
 }
 
-# PROJECT ASSUMPTION: exact deadline turn indices need verification.
-# Race objectives based on Oguri Cap's URA career goals.
+# Turn index reference (calendar is 1-indexed):
+#   Junior:  months 6-12 → indices 1-14
+#   Classic: months 1-12 → indices 15-38
+#   Senior:  months 1-12 → indices 39-62
+#   URA Finals: indices 63-68
+#   e.g. Junior June late  = index 2
+#        Classic April early = index 15 + (4-1)*2    = 21
+#        Classic June late   = index 15 + (6-1)*2+1  = 26
 OGURI_CAP_URA_OBJECTIVES: list[CareerObjective] = [
     CareerObjective(
         id="oguri_junior_debut",
@@ -46,16 +52,16 @@ OGURI_CAP_URA_OBJECTIVES: list[CareerObjective] = [
     ),
     CareerObjective(
         id="oguri_fans_5000",
-        description="Reach 5,000 fans",
+        description="Reach 700 fans",
         objective_type=ObjectiveType.FAN_COUNT,
-        deadline_turn_index=20,
-        required_fans=5_000,
+        deadline_turn_index=19,
+        required_fans=700,
     ),
     CareerObjective(
         id="oguri_satsuki_sho",
         description="Satsuki Sho - top 5",
         objective_type=ObjectiveType.RACE,
-        deadline_turn_index=31,
+        deadline_turn_index=21,
         race_id="satsuki_sho",
         required_place=5,
     ),
@@ -63,7 +69,7 @@ OGURI_CAP_URA_OBJECTIVES: list[CareerObjective] = [
         id="oguri_japanese_derby",
         description="Japanese Derby - top 5",
         objective_type=ObjectiveType.RACE,
-        deadline_turn_index=33,
+        deadline_turn_index=24,
         race_id="japanese_derby",
         required_place=5,
     ),
@@ -71,30 +77,30 @@ OGURI_CAP_URA_OBJECTIVES: list[CareerObjective] = [
         id="oguri_takarazuka_kinen",
         description="Takarazuka Kinen - top 3",
         objective_type=ObjectiveType.RACE,
-        deadline_turn_index=35,
+        deadline_turn_index=26,
         race_id="takarazuka_kinen_classic",
         required_place=3,
     ),
     CareerObjective(
         id="oguri_fans_70000",
-        description="Reach 70,000 fans",
+        description="Reach 15,000 fans",
         objective_type=ObjectiveType.FAN_COUNT,
         deadline_turn_index=50,
-        required_fans=70_000,
+        required_fans=15_000,
     ),
     CareerObjective(
         id="oguri_takarazuka_kinen_senior",
         description="Takarazuka Kinen - top 3",
         objective_type=ObjectiveType.RACE,
-        deadline_turn_index=55,
+        deadline_turn_index=50,
         race_id="takarazuka_kinen_senior",
         required_place=3,
     ),
     CareerObjective(
         id="oguri_fans_120000",
-        description="Reach 120,000 fans",
+        description="Reach 25,000 fans",
         objective_type=ObjectiveType.FAN_COUNT,
         deadline_turn_index=62,
-        required_fans=120_000,
+        required_fans=25_000,
     ),
 ]

@@ -30,7 +30,8 @@ class CareerEngine:
 
         actions: list[CareerAction] = [TrainAction(training) for training in TrainingType]
         actions.extend([RestAction(), RecreationAction()])
-        actions.extend(RaceAction(name=race.name, race_id=race.id) for race in self.scenario.available_races(turn, state.fans))
+        races = self.scenario.available_races(turn, state.fans)
+        actions.extend(RaceAction(name=race.name, race_id=race.id) for race in self._filter_by_aptitude(state, races))
         return actions
 
     def step(self, state: CareerState, action: CareerAction) -> CareerState:
@@ -87,6 +88,25 @@ class CareerEngine:
         state.energy += energy_delta
         state.clamp_energy()
         self._record_training_for_facility_level(state, action.training)
+        # Source: GLOBAL-REF line 3770 — Extra Training: Occurrence after successful training: 6% Chance
+        #   Top option:    +5 trained stat, -5 energy (20% chance cures a debuff)
+        #   Bottom option: +5 energy
+        extra_training = None
+        if self.rng.random() < 0.06:
+            if self.rng.random() < 0.50:
+                extra_training = "top"
+                growth = state.growth_rates.get(action.training.value, 0)
+                bonus = floor(5 * (1 + growth / 100)) if growth else 5
+                setattr(state.stats, action.training.value,
+                        min(1200, getattr(state.stats, action.training.value) + bonus))
+                state.energy -= 5
+                if self.rng.random() < 0.20:
+                    state.conditions.difference_update({Condition.POOR_PRACTICE, Condition.SKIN_OUTBREAK,
+                                                        Condition.NIGHT_OWL, Condition.SLOW_METABOLISM})
+            else:
+                extra_training = "bottom"
+                state.energy += 5
+            state.clamp_energy()
         state.logs.append(
             TurnLogEntry(
                 turn,
@@ -96,6 +116,7 @@ class CareerEngine:
                     "facility_level": max(facility_level, state.facility_levels[action.training]),
                     "fail_rate": fail_rate,
                     "gains": gains,
+                    "extra_training": extra_training,
                 },
             )
         )
@@ -117,7 +138,9 @@ class CareerEngine:
         state.energy += recovered
         if choice == "30_nightowl":
             state.conditions.add(Condition.NIGHT_OWL)
-        state.energy += recovered
+        # Source: GLOBAL-REF line 2955 — resting in summer cures ailments
+        if turn.is_summer_camp:
+            state.conditions.difference_update({Condition.POOR_PRACTICE, Condition.SKIN_OUTBREAK, Condition.NIGHT_OWL})
         mood_delta = 1 if turn.is_summer_camp else 0
         if mood_delta:
             self._change_motivation(state, mood_delta)
@@ -127,11 +150,11 @@ class CareerEngine:
     def _race(self, state: CareerState, action: RaceAction) -> None:
         turn = self.current_turn(state)
         race = self._resolve_race(turn.label, action)
-        if race is not None and race.fan_requirement > state.fans:
+        mandatory = turn.is_ura_race or self._mandatory_race_for_turn(state) is not None
+        if not mandatory and race is not None and race.fan_requirement > state.fans:
             raise ValueError(f"not enough fans for {race.name}: need {race.fan_requirement}, have {state.fans}")
 
         starting_energy = state.energy
-        mandatory = turn.is_ura_race or self._mandatory_race_for_turn(state) is not None
         probability = self.estimate_win_probability(state.stats)
         won = self.rng.random() < probability
         is_ura_race = turn.is_ura_race or bool(race and race.is_scenario_race)
@@ -199,12 +222,19 @@ class CareerEngine:
 
         state.energy += energy_delta
         self._change_motivation(state, motivation_delta)
+        # Source: GLOBAL-REF line 3740 — Bonus Crane game event afterwards: 25% Chance
+        crane = False
+        if self.rng.random() < 0.25:
+            crane = True
+            bonus = self.rng.choices([10, 20, 30], weights=[50, 35, 15], k=1)[0]
+            state.energy += bonus
         state.clamp_energy()
         state.logs.append(
             TurnLogEntry(
                 turn,
                 "recreation",
-                {"outcome": outcome, "energy_delta": energy_delta, "motivation_delta": motivation_delta, "motivation": state.motivation.name},
+                {"outcome": outcome, "energy_delta": energy_delta, "motivation_delta": motivation_delta,
+                 "motivation": state.motivation.name, "crane_game": crane},
             )
         )
 
@@ -295,6 +325,16 @@ class CareerEngine:
             wisdom=calc(base.wisdom, stat_bonuses.wisdom),
             skill_points=calc(base.skill_points, stat_bonuses.skill_points),
         )
+        growth = state.growth_rates
+        if growth:
+            gains = Stats(
+                speed=floor(gains.speed * (1 + growth.get("speed", 0) / 100)),
+                stamina=floor(gains.stamina * (1 + growth.get("stamina", 0) / 100)),
+                power=floor(gains.power * (1 + growth.get("power", 0) / 100)),
+                guts=floor(gains.guts * (1 + growth.get("guts", 0) / 100)),
+                wisdom=floor(gains.wisdom * (1 + growth.get("wisdom", 0) / 100)),
+                skill_points=gains.skill_points,
+            )
         energy_delta = base_energy + wisdom_friendship_recovery
         if energy_delta < 0 and energy_cost_reduction_percent:
             energy_delta = -floor(abs(energy_delta) * (1 - energy_cost_reduction_percent / 100))
@@ -329,6 +369,20 @@ class CareerEngine:
             if chosen_index < len(all_types) and all_types[chosen_index] == training:
                 placed.append(support)
         return placed
+
+    @staticmethod
+    def _filter_by_aptitude(state: CareerState, races: list) -> list:
+        aptitudes = state.aptitudes
+        if not aptitudes:
+            return races
+        filtered = []
+        for race in races:
+            surface_apt = aptitudes.get(race.surface.value, "A")
+            dist_apt = aptitudes.get(race.distance_type.value, "A")
+            if surface_apt in {"E", "F"} or dist_apt in {"E", "F"}:
+                continue
+            filtered.append(race)
+        return filtered
 
     def _apply_scenario_events(self, state: CareerState) -> None:
         turn = self.current_turn(state)

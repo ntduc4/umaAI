@@ -227,12 +227,16 @@ class CareerState:
     completed_objective_ids: set[str] = field(default_factory=set)
     event_history: set[str] = field(default_factory=set)
     conditions: set[Condition] = field(default_factory=set)
+    growth_rates: dict[str, int] = field(default_factory=dict)
+    aptitudes: dict[str, str] = field(default_factory=dict)
 
     @classmethod
-    def new(cls, base_stats: Stats, support_cards: list[SupportCard] | None = None) -> CareerState:
+    def new(cls, base_stats: Stats, support_cards: list[SupportCard] | None = None, *, growth_rates: dict[str, int] | None = None, aptitudes: dict[str, str] | None = None) -> CareerState:
         state = cls(
             stats=base_stats,
             supports=[SupportState.from_card(card) for card in support_cards or []],
+            growth_rates=growth_rates or {},
+            aptitudes=aptitudes or {},
         )
         for card in support_cards or []:
             state.stats.add(card.initial_stats)
@@ -240,3 +244,34 @@ class CareerState:
 
     def clamp_energy(self) -> None:
         self.energy = max(0, min(MAX_ENERGY, self.energy))
+
+    def clone(self) -> CareerState:
+        import copy
+        from copy import deepcopy
+
+        return CareerState(
+            stats=Stats(
+                speed=self.stats.speed, stamina=self.stats.stamina,
+                power=self.stats.power, guts=self.stats.guts,
+                wisdom=self.stats.wisdom, skill_points=self.stats.skill_points,
+            ),
+            energy=self.energy,
+            motivation=self.motivation,
+            turn_index=self.turn_index,
+            trainee_id=self.trainee_id,
+            fans=self.fans,
+            director_bond=self.director_bond,
+            failed=self.failed,
+            consecutive_races=self.consecutive_races,
+            facility_levels=dict(self.facility_levels),
+            training_counts=dict(self.training_counts),
+            supports=[SupportState(card=support.card, bond=support.bond) for support in self.supports],
+            logs=list(self.logs),
+            race_results=list(self.race_results),
+            objectives=list(self.objectives),
+            completed_objective_ids=set(self.completed_objective_ids),
+            event_history=set(self.event_history),
+            conditions=set(self.conditions),
+            growth_rates=dict(self.growth_rates),
+            aptitudes=dict(self.aptitudes),
+        )

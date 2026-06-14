@@ -593,3 +593,45 @@ def test_bond_increases_for_all_placed_supports_not_just_matching() -> None:
     engine.step(state, TrainAction(TrainingType.STAMINA))
 
     assert state.supports[1].bond == 47
+
+
+def test_growth_rates_default_to_zero() -> None:
+    state = CareerState.new(Stats())
+    assert state.growth_rates == {}
+
+
+def test_training_applies_growth_bonus() -> None:
+    state = CareerState.new(Stats(), growth_rates={"speed": 20, "power": 10})
+    state.event_history.add("ura_opening")
+    engine = CareerEngine(URAScenario(), rng=Random(1))
+
+    engine.step(state, TrainAction(TrainingType.SPEED))
+
+    assert state.stats.speed == 12
+    assert state.stats.power == 5
+    assert state.stats.skill_points == 2
+
+
+def test_load_oguri_cap_character_data() -> None:
+    from data.characters.oguri_cap import OGURI_CAP_BASE_STATS, OGURI_CAP_GROWTH_BONUS, OGURI_CAP_URA_OBJECTIVES
+
+    assert OGURI_CAP_BASE_STATS.speed == 101
+    assert OGURI_CAP_BASE_STATS.stamina == 66
+    assert OGURI_CAP_GROWTH_BONUS["speed"] == 20
+    assert OGURI_CAP_GROWTH_BONUS["power"] == 10
+    assert len(OGURI_CAP_URA_OBJECTIVES) == 8
+    assert OGURI_CAP_URA_OBJECTIVES[0].race_id == "junior_debut"
+
+
+def test_rollout_planner_completes_oguri_cap_ura() -> None:
+    from uma_ai.career.loader import oguri_cap_ura_state
+    from uma_ai.heuristics.planner import RolloutPlanner
+
+    for seed in range(50):
+        state = oguri_cap_ura_state()
+        engine = CareerEngine(URAScenario(), rng=Random(seed))
+        planner = RolloutPlanner(engine, rng=Random(seed), rollouts=5, depth=6)
+        final = planner.run(state)
+        if not final.failed and final.turn_index >= 60:
+            return
+    assert False, "no seed produced a successful career in 50 tries"
