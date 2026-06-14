@@ -14,6 +14,20 @@ class URAScenario(Scenario):
     def turns(self) -> list[Turn]:
         turns: list[Turn] = []
         index = 0
+        # Pre-debut: Junior January-May (10 turns, no racing allowed)
+        for month in range(1, 6):
+            for half in ("early", "late"):
+                index += 1
+                turns.append(
+                    Turn(
+                        index=index,
+                        year="Junior",
+                        month=month,
+                        half=half,
+                        label=f"Pre-Debut {month:02d} {half}",
+                        pre_debut=True,
+                    )
+                )
         for year, months in (
             ("Junior", range(6, 13)),
             ("Classic", range(1, 13)),
@@ -43,29 +57,70 @@ class URAScenario(Scenario):
     @cached_property
     def race_calendar(self) -> list[RaceDefinition]:
         races = [
+            # -- Junior Year --
             self._race("junior_debut", "Junior Debut", "Junior", 6, "late", RaceGrade.DEBUT, Surface.TURF, 1600, 0, 700),
+            self._race("junior_op_july", "Matsushima Tokubetsu", "Junior", 7, "late", RaceGrade.OP, Surface.TURF, 1800, 500, 1200),
+            self._race("junior_preop_aug", "Fukushima Tokubetsu", "Junior", 8, "early", RaceGrade.PRE_OP, Surface.TURF, 1600, 0, 800),
+            self._race("junior_op_aug", "Sapporo Tokubetsu", "Junior", 8, "late", RaceGrade.OP, Surface.TURF, 1800, 500, 1200),
+            self._race("junior_preop_sep", "Niigata Tokubetsu", "Junior", 9, "early", RaceGrade.PRE_OP, Surface.TURF, 2000, 0, 800),
+            self._race("junior_g3_sep", "Sapporo Nisai Stakes", "Junior", 9, "late", RaceGrade.G3, Surface.TURF, 1800, 1000, 3500),
+            self._race("junior_op_oct", "Kyoto Tokubetsu", "Junior", 10, "early", RaceGrade.OP, Surface.TURF, 1600, 500, 1200),
+            self._race("junior_g2_oct", "Saudi Arabia Royal Cup", "Junior", 10, "late", RaceGrade.G3, Surface.TURF, 1600, 1000, 3500),
+            self._race("junior_g3_nov", "Daily Hai Nisai Stakes", "Junior", 11, "early", RaceGrade.G2, Surface.TURF, 1600, 2000, 5000),
+            self._race("junior_op_nov", "Tokyo Sports Hai", "Junior", 11, "late", RaceGrade.G2, Surface.TURF, 1800, 2000, 5000),
             self._race("asahi_hai_fs", "Asahi Hai Futurity Stakes", "Junior", 12, "early", RaceGrade.G1, Surface.TURF, 1600, 7000, 7000),
             self._race("hopeful_stakes", "Hopeful Stakes", "Junior", 12, "late", RaceGrade.G1, Surface.TURF, 2000, 7000, 7000),
+            # -- Classic Year --
+            self._race("classic_g3_jan", "Keisei Hai", "Classic", 1, "late", RaceGrade.G3, Surface.TURF, 2000, 1000, 3500),
+            self._race("classic_op_feb", "Kisaragi Sho", "Classic", 2, "early", RaceGrade.G3, Surface.TURF, 1800, 1000, 3500),
+            self._race("classic_g3_feb", "Kyodo Tsushin Hai", "Classic", 2, "late", RaceGrade.G3, Surface.TURF, 1800, 1500, 3800),
+            self._race("classic_g2_mar", "Tulip Sho", "Classic", 3, "early", RaceGrade.G2, Surface.TURF, 1600, 2000, 5000),
+            self._race("classic_g2_mar_late", "Spring Stakes", "Classic", 3, "late", RaceGrade.G2, Surface.TURF, 1800, 2000, 5200),
             self._race("satsuki_sho", "Satsuki Sho", "Classic", 4, "early", RaceGrade.G1, Surface.TURF, 2000, 4500, 11000),
             self._race("oka_sho", "Oka Sho", "Classic", 4, "early", RaceGrade.G1, Surface.TURF, 1600, 4500, 10500),
+            self._race("classic_g2_apr", "Flora Stakes", "Classic", 4, "late", RaceGrade.G2, Surface.TURF, 2000, 2000, 5200),
+            self._race("classic_g3_may_early", "Kyoto Shinbun Hai", "Classic", 5, "early", RaceGrade.G2, Surface.TURF, 2200, 2000, 5200),
             self._race("nhk_mile_cup", "NHK Mile Cup", "Classic", 5, "early", RaceGrade.G1, Surface.TURF, 1600, 5000, 10500),
             self._race("japanese_derby", "Japanese Derby", "Classic", 5, "late", RaceGrade.G1, Surface.TURF, 2400, 6000, 20000),
             self._race("japanese_oaks", "Japanese Oaks", "Classic", 5, "late", RaceGrade.G1, Surface.TURF, 2400, 6000, 11000),
+            self._race("classic_g3_jun", "Epsom Cup", "Classic", 6, "early", RaceGrade.G3, Surface.TURF, 1800, 1500, 3800),
             self._race("takarazuka_kinen_classic", "Takarazuka Kinen", "Classic", 6, "late", RaceGrade.G1, Surface.TURF, 2200, 20000, 15000),
+            self._race("classic_g3_jul", "Tanabata Sho", "Classic", 7, "late", RaceGrade.G3, Surface.TURF, 2000, 1500, 3800),
+            self._race("classic_g3_aug", "Sekiya Kinen", "Classic", 8, "late", RaceGrade.G3, Surface.TURF, 1600, 1500, 3800),
+            self._race("classic_g3_sep", "Keisei Hai Autumn", "Classic", 9, "late", RaceGrade.G2, Surface.TURF, 2000, 2000, 5000),
+            self._race("classic_g2_oct", "Mainichi Okan", "Classic", 10, "early", RaceGrade.G2, Surface.TURF, 1800, 3000, 6000),
             self._race("kikuka_sho", "Kikuka Sho", "Classic", 10, "late", RaceGrade.G1, Surface.TURF, 3000, 7500, 12000),
             self._race("shuka_sho", "Shuka Sho", "Classic", 10, "late", RaceGrade.G1, Surface.TURF, 2000, 7500, 10000),
             self._race("tenno_sho_autumn_classic", "Tenno Sho Autumn", "Classic", 10, "late", RaceGrade.G1, Surface.TURF, 2000, 20000, 15000),
+            self._race("classic_g3_nov", "Fukushima Kinen", "Classic", 11, "early", RaceGrade.G3, Surface.TURF, 2000, 1500, 3800),
+            self._race("mile_championship_classic", "Mile Championship", "Classic", 11, "late", RaceGrade.G1, Surface.TURF, 1600, 15000, 13000),
             self._race("japan_cup_classic", "Japan Cup", "Classic", 11, "late", RaceGrade.G1, Surface.TURF, 2400, 25000, 30000),
+            self._race("classic_g2_dec", "Capella Stakes", "Classic", 12, "early", RaceGrade.G3, Surface.TURF, 1200, 1500, 3500),
             self._race("arima_kinen_classic", "Arima Kinen", "Classic", 12, "late", RaceGrade.G1, Surface.TURF, 2500, 25000, 30000),
+            # -- Senior Year --
+            self._race("senior_g3_jan", "Kyoto Kimpai", "Senior", 1, "late", RaceGrade.G3, Surface.TURF, 1600, 1500, 3800),
+            self._race("senior_g2_feb", "Kyoto Kinen", "Senior", 2, "late", RaceGrade.G2, Surface.TURF, 2200, 3000, 6000),
+            self._race("senior_g3_mar", "Nakayama Kinen", "Senior", 3, "early", RaceGrade.G2, Surface.TURF, 1800, 3000, 6000),
             self._race("osaka_hai", "Osaka Hai", "Senior", 3, "late", RaceGrade.G1, Surface.TURF, 2000, 20000, 13500),
+            self._race("senior_g3_apr", "Lord Derby Challenge", "Senior", 4, "early", RaceGrade.G3, Surface.TURF, 1600, 1500, 3800),
             self._race("tenno_sho_spring", "Tenno Sho Spring", "Senior", 4, "late", RaceGrade.G1, Surface.TURF, 3200, 20000, 15000),
+            self._race("senior_g2_may", "Kyoto Mile", "Senior", 5, "early", RaceGrade.G2, Surface.TURF, 1600, 3000, 6000),
             self._race("victoria_mile", "Victoria Mile", "Senior", 5, "early", RaceGrade.G1, Surface.TURF, 1600, 10000, 10500),
+            self._race("senior_g3_may_late", "Meguro Kinen", "Senior", 5, "late", RaceGrade.G2, Surface.TURF, 2500, 3000, 6000),
             self._race("yasuda_kinen", "Yasuda Kinen", "Senior", 6, "early", RaceGrade.G1, Surface.TURF, 1600, 15000, 13000),
+            self._race("senior_g3_jun_early", "Naruo Kinen", "Senior", 6, "early", RaceGrade.G3, Surface.TURF, 2000, 1500, 3800),
             self._race("takarazuka_kinen_senior", "Takarazuka Kinen", "Senior", 6, "late", RaceGrade.G1, Surface.TURF, 2200, 20000, 15000),
+            self._race("senior_g3_jul", "CBC Sho", "Senior", 7, "late", RaceGrade.G3, Surface.TURF, 1200, 1500, 3800),
+            self._race("senior_g3_aug", "Sapporo Kinen", "Senior", 8, "late", RaceGrade.G2, Surface.TURF, 2000, 3000, 6000),
+            self._race("senior_g2_sep_late", "All Comers", "Senior", 9, "late", RaceGrade.G2, Surface.TURF, 2200, 3000, 6000),
             self._race("sprinters_stakes", "Sprinters Stakes", "Senior", 9, "late", RaceGrade.G1, Surface.TURF, 1200, 15000, 13000),
+            self._race("senior_g2_oct", "Fuchu Himba Stakes", "Senior", 10, "early", RaceGrade.G2, Surface.TURF, 1800, 3000, 6000),
             self._race("tenno_sho_autumn_senior", "Tenno Sho Autumn", "Senior", 10, "late", RaceGrade.G1, Surface.TURF, 2000, 20000, 15000),
+            self._race("senior_g2_nov", "Swan Stakes", "Senior", 11, "early", RaceGrade.G2, Surface.TURF, 1400, 3000, 5700),
             self._race("japan_cup_senior", "Japan Cup", "Senior", 11, "late", RaceGrade.G1, Surface.TURF, 2400, 25000, 30000),
+            self._race("senior_g2_dec", "Chunichi Shimbun Hai", "Senior", 12, "early", RaceGrade.G3, Surface.TURF, 2000, 1500, 3800),
             self._race("arima_kinen_senior", "Arima Kinen", "Senior", 12, "late", RaceGrade.G1, Surface.TURF, 2500, 25000, 30000),
+            # -- URA Finals --
             self._race("ura_preliminary", "URA Finals Preliminary", "URA", 12, "finals", RaceGrade.EX, Surface.TURF, 2000, 0, 0, is_scenario_race=True),
             self._race("ura_semifinal", "URA Finals Semifinal", "URA", 12, "finals", RaceGrade.EX, Surface.TURF, 2000, 0, 0, is_scenario_race=True),
             self._race("ura_final", "URA Finals Final", "URA", 12, "finals", RaceGrade.EX, Surface.TURF, 2000, 0, 0, is_scenario_race=True),
@@ -75,19 +130,19 @@ class URAScenario(Scenario):
     @cached_property
     def scenario_events(self) -> list[ScenarioEvent]:
         return [
-            ScenarioEvent("aoi_three_legged_race", "A Three-Legged Race", 35, stats=Stats(wisdom=20), skill_points=20, min_fans=50_000),
-            ScenarioEvent("classic_100k_fans", "Classic Year 100k Fans", 38, skill_points=30, min_fans=100_000),
+            ScenarioEvent("aoi_three_legged_race", "A Three-Legged Race", 45, stats=Stats(wisdom=20), skill_points=20, min_fans=50_000),
+            ScenarioEvent("classic_100k_fans", "Classic Year 100k Fans", 48, skill_points=30, min_fans=100_000),
             ScenarioEvent(
                 "senior_early_april_fan_meeting",
                 "Senior Early April Fan Meeting",
-                45,
+                55,
                 motivation_delta=1,
                 min_fans=70_000,
                 alternate_min_fans=60_000,
                 alternate_trainee_ids=frozenset({"haru_urara", "smart_falcon"}),
                 min_director_bond=60,
             ),
-            ScenarioEvent("senior_240k_fans", "Senior Year 240k Fans", 62, skill_points=30, min_fans=240_000),
+            ScenarioEvent("senior_240k_fans", "Senior Year 240k Fans", 72, skill_points=30, min_fans=240_000),
         ]
 
     def base_training_stats(self, training: TrainingType, turn: Turn, facility_level: int = 1) -> Stats:

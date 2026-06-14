@@ -22,17 +22,21 @@ class RolloutPlanner:
         self.rng = rng or Random()
         self.rollout_count = rollouts
         self.depth = depth
+        self.timing: dict[int, float] = {}
 
     def run(self, state: CareerState) -> CareerState:
+        import time
         while not self.engine.is_complete(state) and not state.failed:
             actions = self.engine.legal_actions(state)
             if not actions:
                 break
+            t0 = time.monotonic()
             if len(actions) == 1:
                 best = actions[0]
             else:
                 best = self._best_action(state, actions)
             self.engine.step(state, best)
+            self.timing[state.turn_index] = time.monotonic() - t0
         return state
 
     def _best_action(self, state: CareerState, actions: list[CareerAction]) -> CareerAction:

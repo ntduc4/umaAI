@@ -30,8 +30,9 @@ class CareerEngine:
 
         actions: list[CareerAction] = [TrainAction(training) for training in TrainingType]
         actions.extend([RestAction(), RecreationAction()])
-        races = self.scenario.available_races(turn, state.fans)
-        actions.extend(RaceAction(name=race.name, race_id=race.id) for race in self._filter_by_aptitude(state, races))
+        if not turn.pre_debut:
+            races = self.scenario.available_races(turn, state.fans)
+            actions.extend(RaceAction(name=race.name, race_id=race.id) for race in self._filter_by_aptitude(state, races))
         return actions
 
     def step(self, state: CareerState, action: CareerAction) -> CareerState:
@@ -173,6 +174,7 @@ class CareerEngine:
             race_id=race.id if race is not None else action.race_id,
             fans_gained=fans_gained,
             placement=1 if won else 2,
+            grade=race.grade.value if race is not None else "",
         )
         state.race_results.append(result)
         state.logs.append(
@@ -239,9 +241,9 @@ class CareerEngine:
         )
 
     def estimate_win_probability(self, stats: Stats) -> float:
-        # Placeholder race model: enough to make search trade off stat growth vs racing.
-        score = stats.total_without_skill_points + stats.skill_points * 0.25
-        return max(0.05, min(0.95, score / 3000))
+        # PROJECT ASSUMPTION: placeholder constant win rate.
+        # A stat-based formula will be added when a race simulator is built.
+        return 0.90
 
     def training_fail_rate(self, energy: int, training: TrainingType, state: CareerState | None = None) -> float:
         if training == TrainingType.WISDOM:
@@ -294,6 +296,7 @@ class CareerEngine:
         for support_state in placed:
             support_count += 1
             stat_bonuses.add(support_state.card.stat_bonus_for(training))
+            stat_bonuses.add(support_state.card.bonus_stats)
             mood_effect_percent += support_state.card.mood_effect_percent
             training_effectiveness_percent += support_state.card.training_effectiveness_percent
             energy_cost_reduction_percent += support_state.card.energy_cost_reduction_percent
@@ -439,6 +442,14 @@ class CareerEngine:
                 continue
             if objective.objective_type == ObjectiveType.FAN_COUNT and state.fans >= objective.required_fans:
                 state.completed_objective_ids.add(objective.id)
+                continue
+            if objective.objective_type == ObjectiveType.G1_COUNT:
+                g1_races = [
+                    r for r in state.race_results
+                    if r.grade == "g1" and r.placement <= objective.required_place
+                ]
+                if len(g1_races) >= objective.required_fans:
+                    state.completed_objective_ids.add(objective.id)
                 continue
             if objective.objective_type == ObjectiveType.RACE:
                 result = next((race for race in reversed(state.race_results) if race.race_id == objective.race_id), None)

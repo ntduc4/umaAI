@@ -20,6 +20,7 @@ def manual_support_card(
     failure_protection_percent: int = 0,
     specialty_rate: int = 0,
     initial_stats: Stats | None = None,
+    bonus_stats: Stats | None = None,
 ) -> SupportCard:
     """Create a support card from exact user-provided values."""
 
@@ -39,4 +40,5 @@ def manual_support_card(
         failure_protection_percent=failure_protection_percent,
         specialty_rate=specialty_rate,
         initial_stats=initial_stats or Stats(),
+        bonus_stats=bonus_stats or Stats(),
     )

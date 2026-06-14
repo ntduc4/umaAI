@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from data.characters.oguri_cap import OGURI_CAP_APTITUDES, OGURI_CAP_BASE_STATS, OGURI_CAP_GROWTH_BONUS, OGURI_CAP_URA_OBJECTIVES
-from data.support_cards.default_deck import DEFAULT_DECK
+from uma_ai.data.characters.oguri_cap import OGURI_CAP_APTITUDES, OGURI_CAP_BASE_STATS, OGURI_CAP_GROWTH_BONUS, OGURI_CAP_URA_OBJECTIVES
+from uma_ai.data.support_cards.default_deck import DEFAULT_DECK
 from uma_ai.career.models import CareerState, SupportCard
 
 

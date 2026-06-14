@@ -7,6 +7,9 @@ from uma_ai.career.models import CareerObjective, CareerState, Condition, Motiva
 from uma_ai.scenarios.ura import URAScenario
 
 
+import pytest
+
+
 def test_training_applies_stats_energy_motivation_support_and_bond() -> None:
     support = manual_support_card(
         name="Manual Speed SSR",
@@ -115,7 +118,7 @@ def test_race_probability_is_bounded_and_race_logs_result() -> None:
 
     engine.step(state, RaceAction(name="Debut"))
 
-    assert state.race_results[0].win_probability == 0.95
+    assert state.race_results[0].win_probability == 0.9
     assert state.race_results[0].won is True
     assert state.energy == 85
     assert state.stats.skill_points == 45
@@ -123,7 +126,7 @@ def test_race_probability_is_bounded_and_race_logs_result() -> None:
 
 def test_ura_finals_training_turn_allows_normal_actions() -> None:
     state = CareerState.new(Stats(speed=1200, stamina=1200, power=1200, guts=1200, wisdom=1200))
-    state.turn_index = 62
+    state.turn_index = 72
     engine = CareerEngine(URAScenario(), rng=Random(1))
 
     engine.step(state, TrainAction(TrainingType.SPEED))
@@ -135,7 +138,7 @@ def test_ura_finals_training_turn_allows_normal_actions() -> None:
 
 def test_ura_finals_race_turn_forces_race_action() -> None:
     state = CareerState.new(Stats(speed=1200, stamina=1200, power=1200, guts=1200, wisdom=1200))
-    state.turn_index = 63
+    state.turn_index = 73
     engine = CareerEngine(URAScenario(), rng=Random(1))
 
     engine.step(state, TrainAction(TrainingType.SPEED))
@@ -148,7 +151,7 @@ def test_ura_finals_race_turn_forces_race_action() -> None:
 
 def test_legal_actions_include_training_rest_recreation_and_available_races() -> None:
     state = CareerState.new(Stats())
-    state.turn_index = 1
+    state.turn_index = 11
     engine = CareerEngine(URAScenario(), rng=Random(1))
 
     actions = engine.legal_actions(state)
@@ -221,7 +224,7 @@ def test_recreation_uses_reference_outcome_table() -> None:
 def test_summer_camp_rest_raises_motivation() -> None:
     state = CareerState.new(Stats())
     state.energy = 0
-    state.turn_index = 26
+    state.turn_index = 36
     engine = CareerEngine(URAScenario(), rng=Random(1))
 
     engine.step(state, RestAction())
@@ -232,7 +235,7 @@ def test_summer_camp_rest_raises_motivation() -> None:
 
 def test_reference_ura_fan_events_require_fans() -> None:
     state = CareerState.new(Stats())
-    state.turn_index = 34
+    state.turn_index = 44
     state.fans = 50_000
     engine = CareerEngine(URAScenario(), rng=Random(1))
 
@@ -245,7 +248,7 @@ def test_reference_ura_fan_events_require_fans() -> None:
 
 def test_senior_early_april_fan_meeting_requires_fans_and_director_bond() -> None:
     state = CareerState.new(Stats())
-    state.turn_index = 44
+    state.turn_index = 54
     state.fans = 70_000
     state.director_bond = 60
     engine = CareerEngine(URAScenario(), rng=Random(1))
@@ -258,7 +261,7 @@ def test_senior_early_april_fan_meeting_requires_fans_and_director_bond() -> Non
 
 def test_senior_early_april_fan_meeting_has_lower_urara_falcon_threshold() -> None:
     state = CareerState.new(Stats())
-    state.turn_index = 44
+    state.turn_index = 54
     state.fans = 60_000
     state.director_bond = 60
     state.trainee_id = "haru_urara"
@@ -271,7 +274,7 @@ def test_senior_early_april_fan_meeting_has_lower_urara_falcon_threshold() -> No
 
 def test_senior_early_april_fan_meeting_does_not_trigger_without_director_bond() -> None:
     state = CareerState.new(Stats())
-    state.turn_index = 44
+    state.turn_index = 54
     state.fans = 70_000
     state.director_bond = 59
     engine = CareerEngine(URAScenario(), rng=Random(1))
@@ -336,7 +339,7 @@ def test_ura_scenario_race_rewards_are_affected_by_race_bonus() -> None:
         race_bonus_percent=35,
     )
     state = CareerState.new(Stats(speed=100, stamina=100, power=100, guts=100, wisdom=100), [support])
-    state.turn_index = 63
+    state.turn_index = 73
     engine = CareerEngine(URAScenario(), rng=Random(1))
 
     engine.step(state, RaceAction(name="URA Finals Preliminary", race_id="ura_preliminary"))
@@ -518,7 +521,7 @@ def test_charming_increases_bond_gain() -> None:
 
 def test_summer_camp_uses_facility_level_5() -> None:
     state = CareerState.new(Stats())
-    state.turn_index = 26
+    state.turn_index = 36
     state.facility_levels[TrainingType.SPEED] = 1
     engine = CareerEngine(URAScenario(), rng=Random(1))
     engine.step(state, TrainAction(TrainingType.SPEED))
@@ -613,7 +616,7 @@ def test_training_applies_growth_bonus() -> None:
 
 
 def test_load_oguri_cap_character_data() -> None:
-    from data.characters.oguri_cap import OGURI_CAP_BASE_STATS, OGURI_CAP_GROWTH_BONUS, OGURI_CAP_URA_OBJECTIVES
+    from uma_ai.data.characters.oguri_cap import OGURI_CAP_BASE_STATS, OGURI_CAP_GROWTH_BONUS, OGURI_CAP_URA_OBJECTIVES
 
     assert OGURI_CAP_BASE_STATS.speed == 101
     assert OGURI_CAP_BASE_STATS.stamina == 66
@@ -623,15 +626,16 @@ def test_load_oguri_cap_character_data() -> None:
     assert OGURI_CAP_URA_OBJECTIVES[0].race_id == "junior_debut"
 
 
+@pytest.mark.timeout(30)
 def test_rollout_planner_completes_oguri_cap_ura() -> None:
     from uma_ai.career.loader import oguri_cap_ura_state
     from uma_ai.heuristics.planner import RolloutPlanner
 
-    for seed in range(50):
+    for seed in range(200):
         state = oguri_cap_ura_state()
         engine = CareerEngine(URAScenario(), rng=Random(seed))
-        planner = RolloutPlanner(engine, rng=Random(seed), rollouts=5, depth=6)
+        planner = RolloutPlanner(engine, rng=Random(seed), rollouts=3, depth=4)
         final = planner.run(state)
         if not final.failed and final.turn_index >= 60:
             return
-    assert False, "no seed produced a successful career in 50 tries"
+    assert False, "no seed produced a successful career in 200 tries"

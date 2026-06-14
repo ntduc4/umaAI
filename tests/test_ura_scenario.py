@@ -6,9 +6,9 @@ from uma_ai.scenarios.ura import URAScenario
 def test_ura_calendar_matches_training_period_and_finals() -> None:
     scenario = URAScenario()
 
-    assert len(scenario.turns) == 68
-    assert scenario.turns[0].label == "Junior 06 early"
-    assert scenario.turns[61].label == "Senior 12 late"
+    assert len(scenario.turns) == 78
+    assert scenario.turns[10].label == "Junior 06 early"
+    assert scenario.turns[71].label == "Senior 12 late"
     assert [turn.label for turn in scenario.turns[-6:]] == [
         "URA Finals Preliminary Training",
         "URA Finals Preliminary Race",
@@ -63,8 +63,8 @@ def test_ura_has_common_race_schedule_entries() -> None:
 
 def test_ura_available_races_filter_by_turn_and_fans() -> None:
     scenario = URAScenario()
-    junior_debut_turn = scenario.turns[1]
-    asahi_turn = scenario.turns[12]
+    junior_debut_turn = scenario.turns[11]
+    asahi_turn = scenario.turns[22]
 
     assert [race.id for race in scenario.available_races(junior_debut_turn, fans=0)] == ["junior_debut"]
     assert scenario.available_races(asahi_turn, fans=0) == []
@@ -74,8 +74,8 @@ def test_ura_available_races_filter_by_turn_and_fans() -> None:
 def test_ura_fixed_scenario_events_are_exposed_by_turn() -> None:
     scenario = URAScenario()
 
-    assert scenario.scenario_events_for_turn(scenario.turns[19]) == []
-    assert [event.id for event in scenario.scenario_events_for_turn(scenario.turns[34])] == ["aoi_three_legged_race"]
-    assert [event.id for event in scenario.scenario_events_for_turn(scenario.turns[37])] == ["classic_100k_fans"]
-    assert [event.id for event in scenario.scenario_events_for_turn(scenario.turns[44])] == ["senior_early_april_fan_meeting"]
-    assert [event.id for event in scenario.scenario_events_for_turn(scenario.turns[61])] == ["senior_240k_fans"]
+    assert scenario.scenario_events_for_turn(scenario.turns[29]) == []
+    assert [event.id for event in scenario.scenario_events_for_turn(scenario.turns[44])] == ["aoi_three_legged_race"]
+    assert [event.id for event in scenario.scenario_events_for_turn(scenario.turns[47])] == ["classic_100k_fans"]
+    assert [event.id for event in scenario.scenario_events_for_turn(scenario.turns[54])] == ["senior_early_april_fan_meeting"]
+    assert [event.id for event in scenario.scenario_events_for_turn(scenario.turns[71])] == ["senior_240k_fans"]

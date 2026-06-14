@@ -70,6 +70,7 @@ class DistanceType(StrEnum):
 class ObjectiveType(StrEnum):
     RACE = "race"
     FAN_COUNT = "fan_count"
+    G1_COUNT = "g1_count"
 
 
 @dataclass
@@ -160,6 +161,7 @@ class SupportCard:
     failure_protection_percent: int = 0
     specialty_rate: int = 0
     initial_stats: Stats = field(default_factory=Stats)
+    bonus_stats: Stats = field(default_factory=Stats)
 
     def is_friendship_training(self, training: TrainingType, current_bond: int) -> bool:
         return training == self.card_type and current_bond >= FRIENDSHIP_BOND_THRESHOLD
@@ -187,6 +189,7 @@ class Turn:
     label: str
     is_summer_camp: bool = False
     is_ura_race: bool = False
+    pre_debut: bool = False
 
 
 @dataclass
@@ -198,6 +201,7 @@ class RaceResult:
     race_id: str | None = None
     fans_gained: int = 0
     placement: int = 1
+    grade: str = ""
 
 
 @dataclass
@@ -233,7 +237,14 @@ class CareerState:
     @classmethod
     def new(cls, base_stats: Stats, support_cards: list[SupportCard] | None = None, *, growth_rates: dict[str, int] | None = None, aptitudes: dict[str, str] | None = None) -> CareerState:
         state = cls(
-            stats=base_stats,
+            stats=Stats(
+                speed=base_stats.speed,
+                stamina=base_stats.stamina,
+                power=base_stats.power,
+                guts=base_stats.guts,
+                wisdom=base_stats.wisdom,
+                skill_points=base_stats.skill_points,
+            ),
             supports=[SupportState.from_card(card) for card in support_cards or []],
             growth_rates=growth_rates or {},
             aptitudes=aptitudes or {},
