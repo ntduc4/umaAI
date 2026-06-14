@@ -12,6 +12,11 @@ class TrainingType(StrEnum):
     WISDOM = "wisdom"
 
 
+class RaceEnergyChoice(StrEnum):
+    CONSISTENT = "consistent"
+    GAMBLE = "gamble"
+
+
 @dataclass(frozen=True)
 class TrainAction:
     training: TrainingType
@@ -25,7 +30,9 @@ class RestAction:
 @dataclass(frozen=True)
 class RaceAction:
     name: str = "Optional Race"
+    race_id: str | None = None
     target_rank: int = 1
+    energy_choice: RaceEnergyChoice = RaceEnergyChoice.CONSISTENT
 
 
 @dataclass(frozen=True)

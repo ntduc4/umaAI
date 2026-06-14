@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 
 from uma_ai.career.actions import TrainingType
 
@@ -19,14 +19,45 @@ class Motivation(IntEnum):
     GREAT = 4
 
     @property
-    def training_multiplier(self) -> float:
+    def mood_value(self) -> float:
         return {
-            Motivation.AWFUL: 0.8,
-            Motivation.BAD: 0.9,
-            Motivation.NORMAL: 1.0,
-            Motivation.GOOD: 1.1,
-            Motivation.GREAT: 1.2,
+            Motivation.AWFUL: -0.2,
+            Motivation.BAD: -0.1,
+            Motivation.NORMAL: 0.0,
+            Motivation.GOOD: 0.1,
+            Motivation.GREAT: 0.2,
         }[self]
+
+    @property
+    def training_multiplier(self) -> float:
+        return 1 + self.mood_value
+
+
+class RaceGrade(StrEnum):
+    DEBUT = "debut"
+    PRE_OP = "pre-op"
+    OP = "op"
+    G3 = "g3"
+    G2 = "g2"
+    G1 = "g1"
+    EX = "ex"
+
+
+class Surface(StrEnum):
+    TURF = "turf"
+    DIRT = "dirt"
+
+
+class DistanceType(StrEnum):
+    SPRINT = "sprint"
+    MILE = "mile"
+    MEDIUM = "medium"
+    LONG = "long"
+
+
+class ObjectiveType(StrEnum):
+    RACE = "race"
+    FAN_COUNT = "fan_count"
 
 
 @dataclass
@@ -52,6 +83,52 @@ class Stats:
 
 
 @dataclass(frozen=True)
+class RaceDefinition:
+    id: str
+    name: str
+    year: str
+    month: int
+    half: str
+    grade: RaceGrade
+    surface: Surface
+    distance_m: int
+    distance_type: DistanceType
+    fan_requirement: int = 0
+    fan_gain_first: int = 0
+    stats_first: Stats = field(default_factory=Stats)
+    stats_other: Stats = field(default_factory=Stats)
+    skill_points_first: int = 45
+    skill_points_other: int = 25
+    is_scenario_race: bool = False
+
+
+@dataclass(frozen=True)
+class CareerObjective:
+    id: str
+    description: str
+    objective_type: ObjectiveType
+    deadline_turn_index: int
+    race_id: str | None = None
+    required_place: int = 1
+    required_fans: int = 0
+
+
+@dataclass(frozen=True)
+class ScenarioEvent:
+    id: str
+    name: str
+    turn_index: int
+    stats: Stats = field(default_factory=Stats)
+    skill_points: int = 0
+    energy_delta: int = 0
+    motivation_delta: int = 0
+    min_fans: int = 0
+    alternate_min_fans: int | None = None
+    alternate_trainee_ids: frozenset[str] = frozenset()
+    min_director_bond: int = 0
+
+
+@dataclass(frozen=True)
 class SupportCard:
     """Manual support-card values until an external card database is added."""
 
@@ -61,15 +138,20 @@ class SupportCard:
     training_stats: dict[TrainingType, Stats]
     initial_bond: int = 0
     bond_gain_on_training: int = 7
-    friendship_multiplier: float = 1.25
+    friendship_bonus_percent: int = 0
+    mood_effect_percent: int = 0
+    training_effectiveness_percent: int = 0
+    energy_cost_reduction_percent: int = 0
+    wisdom_friendship_recovery: int = 0
+    race_bonus_percent: int = 0
+    fan_bonus_percent: int = 0
+    failure_protection_percent: int = 0
 
-    def stats_for(self, training: TrainingType, current_bond: int) -> Stats:
-        stats = self.training_stats.get(training, Stats())
-        if training == self.card_type and current_bond >= FRIENDSHIP_BOND_THRESHOLD:
-            boosted = Stats()
-            boosted.add(stats, self.friendship_multiplier)
-            return boosted
-        return stats
+    def is_friendship_training(self, training: TrainingType, current_bond: int) -> bool:
+        return training == self.card_type and current_bond >= FRIENDSHIP_BOND_THRESHOLD
+
+    def stat_bonus_for(self, training: TrainingType) -> Stats:
+        return self.training_stats.get(training, Stats())
 
 
 @dataclass
@@ -99,6 +181,9 @@ class RaceResult:
     win_probability: float
     won: bool
     stats_gained: Stats
+    race_id: str | None = None
+    fans_gained: int = 0
+    placement: int = 1
 
 
 @dataclass
@@ -114,9 +199,19 @@ class CareerState:
     energy: int = MAX_ENERGY
     motivation: Motivation = Motivation.NORMAL
     turn_index: int = 0
+    trainee_id: str | None = None
+    fans: int = 0
+    director_bond: int = 0
+    failed: bool = False
+    consecutive_races: int = 0
+    facility_levels: dict[TrainingType, int] = field(default_factory=lambda: {training: 1 for training in TrainingType})
+    training_counts: dict[TrainingType, int] = field(default_factory=lambda: {training: 0 for training in TrainingType})
     supports: list[SupportState] = field(default_factory=list)
     logs: list[TurnLogEntry] = field(default_factory=list)
     race_results: list[RaceResult] = field(default_factory=list)
+    objectives: list[CareerObjective] = field(default_factory=list)
+    completed_objective_ids: set[str] = field(default_factory=set)
+    event_history: set[str] = field(default_factory=set)
 
     @classmethod
     def new(cls, base_stats: Stats, support_cards: list[SupportCard] | None = None) -> CareerState:
