@@ -33,6 +33,18 @@ class Motivation(IntEnum):
         return 1 + self.mood_value
 
 
+class Condition(StrEnum):
+    PRACTICE_PERFECT = "practice_perfect"
+    PRACTICE_PERFECT_DOUBLE = "practice_perfect_double"
+    CHARMING = "charming"
+    POOR_PRACTICE = "poor_practice"
+    NIGHT_OWL = "night_owl"
+    SKIN_OUTBREAK = "skin_outbreak"
+    MIGRAINE = "migraine"
+    SLOW_METABOLISM = "slow_metabolism"
+    SLACKER = "slacker"
+
+
 class RaceGrade(StrEnum):
     DEBUT = "debut"
     PRE_OP = "pre-op"
@@ -147,6 +159,7 @@ class SupportCard:
     fan_bonus_percent: int = 0
     failure_protection_percent: int = 0
     specialty_rate: int = 0
+    initial_stats: Stats = field(default_factory=Stats)
 
     def is_friendship_training(self, training: TrainingType, current_bond: int) -> bool:
         return training == self.card_type and current_bond >= FRIENDSHIP_BOND_THRESHOLD
@@ -213,13 +226,17 @@ class CareerState:
     objectives: list[CareerObjective] = field(default_factory=list)
     completed_objective_ids: set[str] = field(default_factory=set)
     event_history: set[str] = field(default_factory=set)
+    conditions: set[Condition] = field(default_factory=set)
 
     @classmethod
     def new(cls, base_stats: Stats, support_cards: list[SupportCard] | None = None) -> CareerState:
-        return cls(
+        state = cls(
             stats=base_stats,
             supports=[SupportState.from_card(card) for card in support_cards or []],
         )
+        for card in support_cards or []:
+            state.stats.add(card.initial_stats)
+        return state
 
     def clamp_energy(self) -> None:
         self.energy = max(0, min(MAX_ENERGY, self.energy))

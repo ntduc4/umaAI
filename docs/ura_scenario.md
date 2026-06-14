@@ -36,21 +36,22 @@ This table is the source of truth for whether the current implementation is inte
 | URA three-year career structure | Sourced for broad structure; turn labels are project data | `GT-URA` describes three-year Career and URA qualifiers/finals. `UMAWIKI-URA` states the Finale season adds 6 extra turns. Current labels are implementation names. |
 | Half-month turns | Sourced concept | `GT-BEGINNER` says Career is turn-based and roughly 70 turns. Exact turn labels are project data. |
 | URA Finals forced races | Sourced concept | `GT-URA` says clearing all objectives allows qualifiers, then semifinals, then finals. `UMAWIKI-URA` states each race must be won to advance. Current forced-action implementation is the engine interpretation. |
-| Summer camp flag | Sourced | `GLOBAL-REF` says summer training camp starts in Early July in second and third year. Code flags Classic/Senior July-August as summer camp. No stat multiplier is applied. |
+| Summer camp flag | Sourced | `GLOBAL-REF` says summer training camp starts in Early July in second and third year. Code flags Classic/Senior July-August as summer camp. During summer camp, all facilities are treated as level 5 (`GLOBAL-REF`). Resting in summer raises mood by one stage and can cure ailments. |
 | URA facility level 1-5 table | Sourced | `UMA-GUIDE-BUNDLE` simulator table `Im.ura`; level-1 values cross-check with `GT-URA`. |
 | Facility level-up every four trainings | Sourced | `GT-URA` Training Facility Levels section. |
 | Training energy cost/recovery by facility level | Sourced | `UMA-GUIDE-BUNDLE` simulator table `Im.ura`; level-1 values cross-check with `GT-URA`. |
 | Rest recovery outcomes | Sourced | `GT-BEGINNER`: rest recovers 30, 50, or 70, with 50 most common. |
-| Rest recovery probabilities | Partially sourced | `GLOBAL-REF` gives `70=25%`, `50=62.5%`, `30=10%`, and `30 + Night Owl=2.5%`. Code collapses both 30 outcomes into `30=12.5%` until conditions are modeled. |
+| Rest recovery probabilities | Sourced | `GLOBAL-REF` gives `70=25%`, `50=62.5%`, `30=10%`, and `30 + Night Owl=2.5%`. The 2.5% outcome recovers 30 energy and grants the Night Owl condition. |
 | Race energy cost | `PROJECT ASSUMPTION` for URA | Code uses fixed `-15` energy for URA races. The `-20` top option and `-10/-25` gamble choice from `GLOBAL-REF` are MANT/Twinkle Star behavior and are intentionally not applied to URA. |
 | Recreation/outing outcomes | Sourced except crane/condition details | `GLOBAL-REF` gives Karaoke/Stroll/Shrine probabilities and energy/mood outcomes. Code implements those outcomes. Bonus crane game and shrine condition healing are not modeled. |
-| Training failure rates | `PROJECT ASSUMPTION` for base curve, sourced modifiers | Current bucketed base fail-rate model is not sourced. Failure Protection, Practice Perfect, and Practice Poor modifiers are sourced; only Failure Protection is currently implemented. |
-| Training failure penalties | Partially sourced, simplified | `GLOBAL-REF` gives failed-training aftermath tables. Code still uses simplified failure penalties and does not model Poor Practice conditions. |
+| Training failure rates | Partially sourced | `GLOBAL-REF` gives failure outcome tables (Normal/Worst tiers based on fail rate 1-19%/20-79%/80-100%) and outcome probabilities per tier. Base fail-rate-by-energy curve remains `PROJECT ASSUMPTION` (bucketed: `0%/5%/15%/30%`). |
+| Training failure penalties | Sourced | `GLOBAL-REF` outcome tables with mood loss, stat loss, Poor Practice, and Practice Perfect acquisition. Three tiers: Normal (1-19% rate), Mixed (20-79%, 30% worst), Worst (80-100%). |
 | Motivation training values | Sourced for simulator formula | `UMA-GUIDE-BUNDLE` uses Great/Good/Normal/Bad/Terrible as `+0.2/+0.1/0/-0.1/-0.2`; name mapping to code is straightforward. |
 | Support-card training formula | Sourced from simulator | `UMA-GUIDE-BUNDLE` function `nN`; implemented for manual cards. |
 | Support-card effect fields | Sourced as data fields | `GT-SUPPORT` pages expose friendship, mood, training effectiveness, energy reduction, stat bonuses, etc. |
 | Support-card placement | Partially sourced | `GT-SUPPORT` and `GT-BEGINNER` document specialty priority. Placement formula uses `specialty_rate` field: matching-type supports always placed; non-matching placement probability = `specialty_rate / 100`. This formula is a `PROJECT ASSUMPTION`. |
-| Support bond gain | `PROJECT ASSUMPTION` | Code uses +7 on matching training; needs source. |
+| Support bond gain | Partially sourced | Base `+7` is a `PROJECT ASSUMPTION`. `GLOBAL-REF` states Charming increases bond gain by 40%; code implements as `+2` on top. |
+| Conditions (Practice Perfect, Poor Practice, Charming, Night Owl, Skin Outbreak) | Sourced | `GLOBAL-REF` condition section: Practice Perfect `-2%` fail, Charming `+40%` bond, Poor Practice `+2%`. Night Owl: acquired via 2.5% rest outcome; per-turn 25% chance `-10` energy (23% of that `-1` mood). Skin Outbreak: random mood lowering. Slacker, Migraine, Slow Metabolism documented but not implemented. |
 | Friendship threshold numeric value | `PROJECT ASSUMPTION` | Code uses bond `>= 80`; source confirms orange/friendship gauge concept but not numeric threshold in fetched docs. |
 | Race schedule entries | `PROJECT ASSUMPTION` | Current race list is a scaffold and not yet sourced from a complete race database. |
 | Race fan requirements/rewards | `PROJECT ASSUMPTION` | Current fan requirements and gains are rough data and need a race database source. Fan bonus scaling is implemented as a support-card effect but race fan values still need sourced data. |
@@ -132,14 +133,14 @@ Summer camp occurs during:
 Current engine behavior:
 
 - Summer camp turns are flagged in the calendar only.
-- No summer-camp stat multiplier is currently applied.
+- During summer camp, all facilities are treated as level 5 regardless of actual facility levels (`GLOBAL-REF`).
 - Resting during summer camp raises mood by one stage.
+- Summer camp rest can cure ailments (`GLOBAL-REF`).
 
 Accuracy TODO:
 
-- Verify exact URA summer camp training stat behavior before implementing any stat modifier.
-- Determine whether summer camp overrides facility levels, changes support placement, or changes event rates.
-- Determine if failures, energy costs, support hints, or event rates differ during camp.
+- Implement summer camp condition healing.
+- Determine whether summer camp overrides support placement or changes event rates.
 
 ## Core Career State
 
@@ -436,7 +437,7 @@ This table tracks every support-card effect field and real-game mechanic, showin
 | `fan_bonus_percent` | `_fans_gained`: multiplies first-place fan gain by `1 + percent/100` | Summed from all supports (not placement-filtered). Stacked additively. Only applied on wins. |
 | `failure_protection_percent` | `training_fail_rate`: reduces base fail rate multiplicatively by `1 - percent/100` | Summed from all supports (not placement-filtered). Stacked additively. |
 | `initial_bond` | `SupportState.from_card`: sets starting bond gauge | |
-| `bond_gain_on_training` | `_train`: adds to bond when card type matches the training type | Default `+7` is a `PROJECT ASSUMPTION`. Bond gain applies to all matching supports regardless of placement. |
+| `bond_gain_on_training` | `_train`: adds to bond when card type matches the training type | Default `+7` is a `PROJECT ASSUMPTION`. Charming condition adds `+2`. Bond gain applies to all matching supports regardless of placement. |
 | `card_type` | Determines bond gain matching, friendship eligibility, and per-training stat bonuses | Also determines self-type placement guarantee. |
 | `specialty_rate` | `_placed_supports`: matching-type supports always placed; non-matching placement probability = `specialty_rate / 100` | Sourced from `GT-SUPPORT` (e.g. Kitasan Black has value 20). Placement formula is `PROJECT ASSUMPTION`. |
 | Character-count multiplier | `_calculate_training`: `1 + 0.05 * support_count` applied to all stat gains | Derived from placed support count, not a card field. |
@@ -805,18 +806,30 @@ Implemented now:
 - Basic racing probability.
 - Turn logs.
 - Tests for current behavior.
+- Sourced failure outcome tables (Normal/Worst tiers from GLOBAL-REF).
+- Condition system (Practice Perfect/Poor, Charming, Night Owl, Skin Outbreak).
+- Sourced weight-based support placement (Specialty Priority) from GLOBAL-REF.
+- Summer camp facility level 5 override.
+- Night Owl rest outcome modification.
+- Bond gain for all placed supports (not just matching type).
+- Charming bond gain multiplier (+40% bond → +2 on base +7).
+- `initial_stats` field on SupportCard, applied at career start.
+- `data/support_cards/default_deck.py` with 6-card reference deck.
 
 Next pass should prioritize:
 
-- Support-card placement RNG.
-- Character growth rates in training calculation.
-- Full character objective data.
-- Full race schedule data.
+- Pal card mechanics (Failure Protection, Event Recovery, Pal outings, Pal placement exclusivity).
+- Support bond from hints/events (+5 bond per hint from GLOBAL-REF).
+- Slacker / Migraine / Slow Metabolism condition effects.
+- Summer camp condition healing.
+- Full character objective data (starting stats, growth rates, aptitudes).
+- Full race schedule data (sourced, not scaffold).
 - Real event data and event choice handling.
-- Exact support-card schema for GameTora ingestion.
-- Conditions and training failure penalties.
-- Summer camp behavior from a verifiable source.
-- JP post-rebalance URA level 2-5 table if targeting JP instead of Global/pre-rebalance.
+- Unique-skill level events (Senior Feb/Apr/Dec thresholds).
+- Infirmary action.
+- Crane game bonus event on recreation (25% chance from GLOBAL-REF).
+- Extra Training event (6% post-training chance from GLOBAL-REF).
+- Exact base training failure rate formula (currently PROJECT ASSUMPTION bucketed model).
 
 Recommended first data files:
 

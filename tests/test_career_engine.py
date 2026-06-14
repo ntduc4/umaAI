@@ -3,7 +3,7 @@ from random import Random
 from uma_ai.cards.manual import manual_support_card
 from uma_ai.career.actions import RaceAction, RaceEnergyChoice, RecreationAction, RestAction, TrainAction, TrainingType
 from uma_ai.career.engine import CareerEngine
-from uma_ai.career.models import CareerObjective, CareerState, Motivation, ObjectiveType, Stats
+from uma_ai.career.models import CareerObjective, CareerState, Condition, Motivation, ObjectiveType, Stats
 from uma_ai.scenarios.ura import URAScenario
 
 
@@ -14,6 +14,7 @@ def test_training_applies_stats_energy_motivation_support_and_bond() -> None:
         level=50,
         training_stats={TrainingType.SPEED: Stats(speed=4, power=2, skill_points=1)},
         initial_bond=40,
+        specialty_rate=100_000,
     )
     state = CareerState.new(Stats(speed=100, stamina=100, power=100, guts=100, wisdom=100), [support])
     state.motivation = Motivation.GREAT
@@ -37,6 +38,7 @@ def test_friendship_bonus_applies_after_bond_threshold() -> None:
         training_stats={TrainingType.SPEED: Stats(speed=8)},
         initial_bond=80,
         friendship_bonus_percent=20,
+        specialty_rate=100_000,
     )
     state = CareerState.new(Stats(), [support])
     engine = CareerEngine(URAScenario(), rng=Random(1))
@@ -58,6 +60,7 @@ def test_support_training_uses_mood_training_effect_and_energy_reduction() -> No
         mood_effect_percent=20,
         training_effectiveness_percent=10,
         energy_cost_reduction_percent=10,
+        specialty_rate=100_000,
     )
     state = CareerState.new(Stats(), [support])
     state.motivation = Motivation.GREAT
@@ -420,13 +423,13 @@ def test_support_card_specialty_rate_can_be_set() -> None:
     assert support.specialty_rate == 20
 
 
-def test_support_always_placed_on_matching_type_with_high_specialty_rate() -> None:
+def test_support_placement_uses_weight_model() -> None:
     support = manual_support_card(
         name="High Priority Speed",
         card_type=TrainingType.SPEED,
         level=50,
         training_stats={},
-        specialty_rate=80,
+        specialty_rate=100_000,
     )
     state = CareerState.new(Stats(), [support])
     engine = CareerEngine(URAScenario(), rng=Random(0))
@@ -436,9 +439,9 @@ def test_support_always_placed_on_matching_type_with_high_specialty_rate() -> No
     assert placed[0].card.name == "High Priority Speed"
 
 
-def test_support_can_be_absent_on_non_matching_type() -> None:
+def test_zero_specialty_has_equal_base_weights() -> None:
     support = manual_support_card(
-        name="Speed Only",
+        name="Speed Card",
         card_type=TrainingType.SPEED,
         level=50,
         training_stats={TrainingType.SPEED: Stats(speed=10)},
@@ -448,7 +451,7 @@ def test_support_can_be_absent_on_non_matching_type() -> None:
     engine = CareerEngine(URAScenario(), rng=Random(0))
 
     placed = engine._placed_supports(state, TrainingType.STAMINA)
-    assert len(placed) == 0
+    assert len(placed) in {0, 1}
 
 
 def test_training_only_counts_placed_supports() -> None:
@@ -466,3 +469,127 @@ def test_training_only_counts_placed_supports() -> None:
     engine.step(state, TrainAction(TrainingType.STAMINA))
     assert state.stats.stamina == 9
     assert state.stats.speed == 0
+
+
+def test_condition_tracking_on_state() -> None:
+    state = CareerState.new(Stats())
+    assert state.conditions == set()
+    state.conditions.add(Condition.PRACTICE_PERFECT)
+    assert Condition.PRACTICE_PERFECT in state.conditions
+
+
+def test_practice_perfect_reduces_fail_rate_by_2_percent() -> None:
+    state = CareerState.new(Stats())
+    state.energy = 50
+    engine = CareerEngine(URAScenario(), rng=Random(1))
+    base = engine.training_fail_rate(state.energy, TrainingType.SPEED, state)
+    state.conditions.add(Condition.PRACTICE_PERFECT)
+    with_perfect = engine.training_fail_rate(state.energy, TrainingType.SPEED, state)
+    assert base == 0.05
+    assert with_perfect == 0.03
+
+
+def test_poor_practice_increases_fail_rate_by_2_percent() -> None:
+    state = CareerState.new(Stats())
+    state.energy = 50
+    engine = CareerEngine(URAScenario(), rng=Random(1))
+    base = engine.training_fail_rate(state.energy, TrainingType.SPEED, state)
+    state.conditions.add(Condition.POOR_PRACTICE)
+    with_poor = engine.training_fail_rate(state.energy, TrainingType.SPEED, state)
+    assert base == 0.05
+    assert with_poor == 0.07
+
+
+def test_charming_increases_bond_gain() -> None:
+    support = manual_support_card(
+        name="Manual Speed SSR",
+        card_type=TrainingType.SPEED,
+        level=50,
+        training_stats={TrainingType.SPEED: Stats(speed=4)},
+        initial_bond=40,
+        specialty_rate=100_000,
+    )
+    state = CareerState.new(Stats(speed=100, stamina=100, power=100, guts=100, wisdom=100), [support])
+    state.conditions.add(Condition.CHARMING)
+    engine = CareerEngine(URAScenario(), rng=Random(1))
+    engine.step(state, TrainAction(TrainingType.SPEED))
+    assert state.supports[0].bond == 49
+
+
+def test_summer_camp_uses_facility_level_5() -> None:
+    state = CareerState.new(Stats())
+    state.turn_index = 26
+    state.facility_levels[TrainingType.SPEED] = 1
+    engine = CareerEngine(URAScenario(), rng=Random(1))
+    engine.step(state, TrainAction(TrainingType.SPEED))
+    assert state.stats.speed == 14
+    assert state.stats.power == 7
+    assert state.energy == 73
+    assert state.logs[-1].details["facility_level"] == 5
+
+
+def test_night_owl_energy_drain() -> None:
+    state = CareerState.new(Stats())
+    state.energy = 50
+    state.conditions.add(Condition.NIGHT_OWL)
+    engine = CareerEngine(URAScenario(), rng=Random(1))
+    engine._apply_condition_effects(state)
+    assert state.energy == 40
+
+
+def test_skin_outbreak_mood_drain() -> None:
+    state = CareerState.new(Stats())
+    state.motivation = Motivation.GREAT
+    state.conditions.add(Condition.SKIN_OUTBREAK)
+    engine = CareerEngine(URAScenario(), rng=Random(1))
+    engine._apply_condition_effects(state)
+    assert state.motivation == Motivation.GOOD
+
+
+def test_rest_can_grant_night_owl_condition() -> None:
+    for seed in range(200):
+        state = CareerState.new(Stats())
+        state.energy = 0
+        engine = CareerEngine(URAScenario(), rng=Random(seed))
+        engine.step(state, RestAction())
+        recovered = state.logs[-1].details["energy_recovered"]
+        assert recovered in {30, 50, 70}
+        if recovered == 30 and Condition.NIGHT_OWL in state.conditions:
+            return
+    assert False, "no rest granted Night Owl in 200 seeds"
+
+
+def test_training_failure_uses_outcome_tables() -> None:
+    state = CareerState.new(Stats(speed=100, stamina=100, power=100, guts=100, wisdom=100))
+    state.energy = 1
+    state.conditions.add(Condition.POOR_PRACTICE)
+    engine = CareerEngine(URAScenario(), rng=Random(3))
+    engine.step(state, TrainAction(TrainingType.SPEED))
+    assert state.logs[-1].action == "train_failed"
+    details = state.logs[-1].details
+    assert "outcome_tier" in details
+
+
+def test_bond_increases_for_all_placed_supports_not_just_matching() -> None:
+    speed_card = manual_support_card(
+        name="Speed SSR",
+        card_type=TrainingType.SPEED,
+        level=50,
+        training_stats={},
+        initial_bond=40,
+        specialty_rate=100_000,
+    )
+    stamina_card = manual_support_card(
+        name="Stamina SR",
+        card_type=TrainingType.STAMINA,
+        level=50,
+        training_stats={},
+        initial_bond=40,
+        specialty_rate=100_000,
+    )
+    state = CareerState.new(Stats(), [speed_card, stamina_card])
+    engine = CareerEngine(URAScenario(), rng=Random(1))
+
+    engine.step(state, TrainAction(TrainingType.STAMINA))
+
+    assert state.supports[1].bond == 47

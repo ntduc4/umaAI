@@ -4,7 +4,7 @@ from math import floor
 from random import Random
 
 from uma_ai.career.actions import CareerAction, RaceAction, RecreationAction, RestAction, TrainAction, TrainingType
-from uma_ai.career.models import CareerState, Motivation, ObjectiveType, RaceDefinition, RaceResult, Stats, TurnLogEntry
+from uma_ai.career.models import CareerState, Condition, Motivation, ObjectiveType, RaceDefinition, RaceResult, Stats, TurnLogEntry
 from uma_ai.career.scenario import Scenario
 
 
@@ -41,6 +41,7 @@ class CareerEngine:
 
         turn = self.current_turn(state)
         self._apply_scenario_events(state)
+        self._apply_condition_effects(state)
 
         forced_race = self._forced_race_for_turn(turn.label) if turn.is_ura_race else self._mandatory_race_for_turn(state)
         if forced_race is not None:
@@ -69,16 +70,18 @@ class CareerEngine:
         fail_rate = self.training_fail_rate(state.energy, action.training, state)
         failed = self.rng.random() < fail_rate
         if failed:
-            state.energy -= 10
-            state.clamp_energy()
-            state.logs.append(TurnLogEntry(turn, "train_failed", {"training": action.training.value, "fail_rate": fail_rate}))
+            self._apply_training_failure(state, action.training, fail_rate)
             return
 
         facility_level = state.facility_levels[action.training]
+        if turn.is_summer_camp:
+            facility_level = 5
         gains, energy_delta = self._calculate_training(state, action.training, facility_level)
-        for support in state.supports:
-            if support.card.card_type == action.training:
-                support.bond = min(100, support.bond + support.card.bond_gain_on_training)
+        for support in self._placed_supports(state, action.training):
+            bond_gain = support.card.bond_gain_on_training
+            if Condition.CHARMING in state.conditions:
+                bond_gain = bond_gain + 2
+            support.bond = min(100, support.bond + bond_gain)
 
         state.stats.add(gains)
         state.energy += energy_delta
@@ -90,7 +93,7 @@ class CareerEngine:
                 "train",
                 {
                     "training": action.training.value,
-                    "facility_level": facility_level,
+                    "facility_level": max(facility_level, state.facility_levels[action.training]),
                     "fail_rate": fail_rate,
                     "gains": gains,
                 },
@@ -99,7 +102,21 @@ class CareerEngine:
 
     def _rest(self, state: CareerState) -> None:
         turn = self.current_turn(state)
-        recovered = self.rng.choices([30, 50, 70], weights=[125, 625, 250], k=1)[0]
+        # Source: GLOBAL-REF "Resting" probabilities
+        #   70 Energy Rest: 25% Chance
+        #   50 Energy Rest: 62.5% Chance
+        #   30 Energy Rest: 10% Chance
+        #   30 Energy Rest + Night Owl: 2.5% Chance
+        # Weights: [250, 625, 100, 25] for [70, 50, 30, 30_nightowl]
+        choice = self.rng.choices(
+            ["70", "50", "30", "30_nightowl"],
+            weights=[250, 625, 100, 25],
+            k=1,
+        )[0]
+        recovered = 30 if choice.startswith("30") else int(choice)
+        state.energy += recovered
+        if choice == "30_nightowl":
+            state.conditions.add(Condition.NIGHT_OWL)
         state.energy += recovered
         mood_delta = 1 if turn.is_summer_camp else 0
         if mood_delta:
@@ -151,6 +168,13 @@ class CareerEngine:
 
     def _recreation(self, state: CareerState) -> None:
         turn = self.current_turn(state)
+        # Source: GLOBAL-REF "Recreation" probabilities
+        #   Karaoke (+2 Mood): 35% Chance
+        #   Stroll (+1 Mood, +10 Energy): 30% Chance
+        #   Shrine (+1 Mood, +10 Energy): 20% Chance
+        #   Shrine (+1 Mood, +20 Energy): 10% Chance
+        #   Shrine (+1 Mood, +30 Energy): 5% Chance
+        #   Bonus Crane game event afterwards: 25% Chance (not implemented)
         roll = self.rng.random()
         if roll < 0.35:
             outcome = "karaoke"
@@ -192,6 +216,9 @@ class CareerEngine:
     def training_fail_rate(self, energy: int, training: TrainingType, state: CareerState | None = None) -> float:
         if training == TrainingType.WISDOM:
             return 0.0
+        # PROJECT ASSUMPTION: base fail-rate-by-energy curve not yet directly sourced.
+        # uma.guide states "scales inversely with Energy"; GLOBAL-REF gives outcome tier thresholds
+        # (1-19%, 20-79%, 80-100%) but not the exact energy→rate formula.
         if energy >= 70:
             base = 0.0
         elif energy >= 50:
@@ -202,8 +229,20 @@ class CareerEngine:
             base = 0.30
         if state is None:
             return base
+        # Source: GLOBAL-REF "Conditions"
+        #   Practice Perfect:     -2% fail chance (line 3929)
+        #   Practice Perfect◎:    -4% fail chance (line 3930)
+        #   Poor Practice:        +2% fail chance (line 3940)
+        #   Failure Protection:   multiplicative reduction from supports (GLOBAL-REF)
         failure_protection = sum(support.card.failure_protection_percent for support in state.supports)
-        return round(base * (1 - failure_protection / 100), 2)
+        rate = base * (1 - failure_protection / 100)
+        if Condition.PRACTICE_PERFECT in state.conditions:
+            rate -= 0.02
+        if Condition.PRACTICE_PERFECT_DOUBLE in state.conditions:
+            rate -= 0.04
+        if Condition.POOR_PRACTICE in state.conditions:
+            rate += 0.02
+        return round(max(0.0, rate), 2)
 
     def energy_delta_for_training(self, training: TrainingType) -> int:
         return self.scenario.training_energy_delta(training, self.scenario.turns[0], 1)
@@ -262,11 +301,32 @@ class CareerEngine:
         return gains, energy_delta
 
     def _placed_supports(self, state: CareerState, training: TrainingType) -> list:
+        # Source: GLOBAL-REF "Specialty Priority" (line 4936)
+        # Each training type has a base weight of 100.
+        # "Not appearing" has a weight of 50.
+        # Specialty Priority ADDS to the card's own type weight.
+        #   e.g. Kitasan Black with 80 specialty: Speed weight = 100 + 80 = 180
+        #   Chance to appear on matching type = 180 / (180 + 100*4 + 50) = 28.6%
+        # Non-matching types: 100 / total_weight
+        #
+        # PROJECT ASSUMPTION: unique-skill specialty multiplier (1.2x for Kitasan)
+        #   is not modeled as a separate SupportCard field. Use specialty_rate to
+        #   represent the final effective weight.
         placed = []
+        all_types = list(TrainingType)
+        not_appear_weight = 50
+        base_weight = 100
+
         for support in state.supports:
-            if training == support.card.card_type:
-                placed.append(support)
-            elif support.card.specialty_rate > 0 and self.rng.random() < support.card.specialty_rate / 100:
+            weights = []
+            for t in all_types:
+                w = base_weight
+                if t == support.card.card_type:
+                    w += support.card.specialty_rate
+                weights.append(w)
+            weights.append(not_appear_weight)
+            chosen_index = self.rng.choices(range(len(weights)), weights=weights, k=1)[0]
+            if chosen_index < len(all_types) and all_types[chosen_index] == training:
                 placed.append(support)
         return placed
 
@@ -411,6 +471,17 @@ class CareerEngine:
         }
 
     def _race_penalty_mood_chance(self, streak: int, no_energy: bool) -> float:
+        # Source: GLOBAL-REF optional race penalty table
+        # Racing with positive energy:
+        #   1st consecutive:  0% mood down
+        #   2nd consecutive:  0% mood down
+        #   3rd consecutive: 60% mood down
+        #   4th+ consecutive: 100% mood down
+        # Racing from zero energy:
+        #   1st consecutive: 20% mood down
+        #   2nd consecutive: 33% mood down
+        #   3rd consecutive: 95% mood down
+        #   4th+ consecutive: 100% mood down
         if no_energy:
             return {1: 0.20, 2: 0.33, 3: 0.95, 4: 1.0}[streak]
         return {1: 0.0, 2: 0.0, 3: 0.60, 4: 1.0}[streak]
@@ -421,3 +492,109 @@ class CareerEngine:
         for name in chosen:
             setattr(state.stats, name, max(0, getattr(state.stats, name) - amount))
         return chosen
+
+    def _apply_training_failure(self, state: CareerState, training: TrainingType, fail_rate: float) -> None:
+        turn = self.current_turn(state)
+        trained_stat = training.value
+        # Source: GLOBAL-REF "Failed trainings that consume energy"
+        #   Failure percentages 1-19% → Normal tier (0% Worst)
+        #   Failure percentages 20-79% → Mixed tier (~30% Worst, ~70% Normal)
+        #   Failure percentages 80-100% → Worst tier (100% Worst)
+        #
+        # Normal tier (Get Well Soon!):
+        #   Top option (92%): -1 mood, -5 trained stat
+        #   Top option (8%):  -1 mood, -5 trained stat, Poor Practice
+        #   Bottom (~30%):    -1 mood, -10 trained stat
+        #   Bottom (~55%):    -1 mood, -10 trained stat, Poor Practice
+        #   Bottom (~15%):    Practice Perfect
+        #
+        # Worst tier (Don't Overdo It!):
+        #   Top option (50%):  -3 mood, +10 energy, -10 trained stat, -10 to 2 random stats
+        #   Top option (50%):  -3 mood, +10 energy, -10 trained stat, -10 to 2 random stats, Poor Practice
+        #   Bottom (~97%):     -3 mood, -10 trained stat, -10 to 2 random stats, Poor Practice
+        #   Bottom (~3%):      +10 energy, Practice Perfect
+
+        if fail_rate < 0.20:
+            tier = "normal"
+            option = "top"
+        elif fail_rate < 0.80:
+            tier = "normal" if self.rng.random() >= 0.30 else "worst"
+            option = "top" if self.rng.random() < 0.50 else "bottom"
+        else:
+            tier = "worst"
+            option = "top" if self.rng.random() < 0.50 else "bottom"
+
+        if tier == "normal" and option == "top":
+            if self.rng.random() < 0.08:
+                state.conditions.add(Condition.POOR_PRACTICE)
+            self._change_motivation(state, -1)
+            state.stats = self._reduce_trained_stat(state.stats, trained_stat, 5)
+        elif tier == "normal" and option == "bottom":
+            roll = self.rng.random()
+            if roll < 0.55:
+                state.conditions.add(Condition.POOR_PRACTICE)
+            elif roll < 0.70:
+                state.conditions.add(Condition.PRACTICE_PERFECT)
+            self._change_motivation(state, -1)
+            state.stats = self._reduce_trained_stat(state.stats, trained_stat, 10)
+        elif tier == "worst" and option == "top":
+            if self.rng.random() < 0.50:
+                state.conditions.add(Condition.POOR_PRACTICE)
+            self._change_motivation(state, -3)
+            state.energy += 10
+            state.stats = self._reduce_trained_stat(state.stats, trained_stat, 10)
+            self._lose_random_stats(state, amount=10, count=2)
+        else:
+            roll = self.rng.random()
+            if roll < 0.03:
+                state.conditions.add(Condition.PRACTICE_PERFECT)
+                state.energy += 10
+            else:
+                state.conditions.add(Condition.POOR_PRACTICE)
+                self._change_motivation(state, -3)
+                state.stats = self._reduce_trained_stat(state.stats, trained_stat, 10)
+                self._lose_random_stats(state, amount=10, count=2)
+
+        state.clamp_energy()
+        state.logs.append(
+            TurnLogEntry(
+                turn,
+                "train_failed",
+                {
+                    "training": training.value,
+                    "fail_rate": fail_rate,
+                    "outcome_tier": tier,
+                    "outcome_option": option,
+                },
+            )
+        )
+
+    @staticmethod
+    def _reduce_trained_stat(stats: Stats, trained_stat: str, amount: int) -> Stats:
+        stat_map = {
+            "speed": "speed", "stamina": "stamina", "power": "power", "guts": "guts", "wisdom": "wisdom",
+        }
+        attr = stat_map.get(trained_stat)
+        if attr:
+            setattr(stats, attr, max(0, getattr(stats, attr) - amount))
+        return stats
+
+    def _apply_condition_effects(self, state: CareerState) -> None:
+        # Source: GLOBAL-REF "Conditions" section (lines 3764-3766, 3943-3944)
+        # Night Owl: acquired via 2.5% rest outcome (see _rest).
+        #   Once active: 25% chance of -10 energy per turn; 23% chance of -1 mood when energy drains.
+        # Skin Outbreak: mood randomly lowers regularly (rate is PROJECT ASSUMPTION: 25% per turn)
+        # Slacker: 25% chance to skip training per turn; 23% chance of -1 mood when skipping occurs
+        if Condition.NIGHT_OWL in state.conditions and self.rng.random() < 0.25:
+            state.energy -= 10
+            if self.rng.random() < 0.23:
+                self._change_motivation(state, -1)
+            state.clamp_energy()
+        if Condition.SKIN_OUTBREAK in state.conditions and self.rng.random() < 0.25:
+            self._change_motivation(state, -1)
+        if Condition.SLACKER in state.conditions and self.rng.random() < 0.25:
+            state.logs.append(
+                TurnLogEntry(
+                    self.current_turn(state), "slacker_skip", {"training_skipped": True}
+                )
+            )
