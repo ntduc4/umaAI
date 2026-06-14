@@ -146,6 +146,7 @@ class SupportCard:
     race_bonus_percent: int = 0
     fan_bonus_percent: int = 0
     failure_protection_percent: int = 0
+    specialty_rate: int = 0
 
     def is_friendship_training(self, training: TrainingType, current_bond: int) -> bool:
         return training == self.card_type and current_bond >= FRIENDSHIP_BOND_THRESHOLD

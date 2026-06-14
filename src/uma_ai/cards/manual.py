@@ -18,6 +18,7 @@ def manual_support_card(
     race_bonus_percent: int = 0,
     fan_bonus_percent: int = 0,
     failure_protection_percent: int = 0,
+    specialty_rate: int = 0,
 ) -> SupportCard:
     """Create a support card from exact user-provided values."""
 
@@ -35,4 +36,5 @@ def manual_support_card(
         race_bonus_percent=race_bonus_percent,
         fan_bonus_percent=fan_bonus_percent,
         failure_protection_percent=failure_protection_percent,
+        specialty_rate=specialty_rate,
     )

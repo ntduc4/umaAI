@@ -221,16 +221,17 @@ class CareerEngine:
         wisdom_friendship_recovery = 0
         support_count = 0
 
-        for support in state.supports:
+        placed = self._placed_supports(state, training)
+        for support_state in placed:
             support_count += 1
-            stat_bonuses.add(support.card.stat_bonus_for(training))
-            mood_effect_percent += support.card.mood_effect_percent
-            training_effectiveness_percent += support.card.training_effectiveness_percent
-            energy_cost_reduction_percent += support.card.energy_cost_reduction_percent
-            if support.card.is_friendship_training(training, support.bond):
-                friendship_multiplier *= 1 + support.card.friendship_bonus_percent / 100
+            stat_bonuses.add(support_state.card.stat_bonus_for(training))
+            mood_effect_percent += support_state.card.mood_effect_percent
+            training_effectiveness_percent += support_state.card.training_effectiveness_percent
+            energy_cost_reduction_percent += support_state.card.energy_cost_reduction_percent
+            if support_state.card.is_friendship_training(training, support_state.bond):
+                friendship_multiplier *= 1 + support_state.card.friendship_bonus_percent / 100
                 if training == TrainingType.WISDOM:
-                    wisdom_friendship_recovery += support.card.wisdom_friendship_recovery
+                    wisdom_friendship_recovery += support_state.card.wisdom_friendship_recovery
 
         mood_multiplier = 1 + state.motivation.mood_value * (1 + mood_effect_percent / 100)
         training_effectiveness_multiplier = 1 + training_effectiveness_percent / 100
@@ -259,6 +260,15 @@ class CareerEngine:
         if energy_delta < 0 and energy_cost_reduction_percent:
             energy_delta = -floor(abs(energy_delta) * (1 - energy_cost_reduction_percent / 100))
         return gains, energy_delta
+
+    def _placed_supports(self, state: CareerState, training: TrainingType) -> list:
+        placed = []
+        for support in state.supports:
+            if training == support.card.card_type:
+                placed.append(support)
+            elif support.card.specialty_rate > 0 and self.rng.random() < support.card.specialty_rate / 100:
+                placed.append(support)
+        return placed
 
     def _apply_scenario_events(self, state: CareerState) -> None:
         turn = self.current_turn(state)

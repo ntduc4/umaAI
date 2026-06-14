@@ -394,3 +394,75 @@ def test_mandatory_objective_forces_race_and_marks_complete() -> None:
     assert actions == [RaceAction(name="Junior Debut", race_id="junior_debut")]
     assert state.completed_objective_ids == {"debut"}
     assert state.failed is False
+
+
+def test_support_card_specialty_rate_defaults_to_zero() -> None:
+    from uma_ai.career.models import SupportCard
+
+    card = SupportCard(name="Test", card_type=TrainingType.SPEED, level=1, training_stats={})
+    assert card.specialty_rate == 0
+
+
+def test_support_card_specialty_rate_can_be_set() -> None:
+    support = manual_support_card(
+        name="Kitasan Black",
+        card_type=TrainingType.SPEED,
+        level=45,
+        training_stats={TrainingType.SPEED: Stats(speed=6, power=2)},
+        initial_bond=25,
+        friendship_bonus_percent=20,
+        training_effectiveness_percent=5,
+        race_bonus_percent=5,
+        fan_bonus_percent=10,
+        mood_effect_percent=20,
+        specialty_rate=20,
+    )
+    assert support.specialty_rate == 20
+
+
+def test_support_always_placed_on_matching_type_with_high_specialty_rate() -> None:
+    support = manual_support_card(
+        name="High Priority Speed",
+        card_type=TrainingType.SPEED,
+        level=50,
+        training_stats={},
+        specialty_rate=80,
+    )
+    state = CareerState.new(Stats(), [support])
+    engine = CareerEngine(URAScenario(), rng=Random(0))
+
+    placed = engine._placed_supports(state, TrainingType.SPEED)
+    assert len(placed) == 1
+    assert placed[0].card.name == "High Priority Speed"
+
+
+def test_support_can_be_absent_on_non_matching_type() -> None:
+    support = manual_support_card(
+        name="Speed Only",
+        card_type=TrainingType.SPEED,
+        level=50,
+        training_stats={TrainingType.SPEED: Stats(speed=10)},
+        specialty_rate=0,
+    )
+    state = CareerState.new(Stats(), [support])
+    engine = CareerEngine(URAScenario(), rng=Random(0))
+
+    placed = engine._placed_supports(state, TrainingType.STAMINA)
+    assert len(placed) == 0
+
+
+def test_training_only_counts_placed_supports() -> None:
+    support = manual_support_card(
+        name="Speed Card",
+        card_type=TrainingType.SPEED,
+        level=50,
+        training_stats={TrainingType.SPEED: Stats(speed=10)},
+        specialty_rate=0,
+    )
+    state = CareerState.new(Stats(), [support])
+    state.event_history.add("ura_opening")
+    engine = CareerEngine(URAScenario(), rng=Random(1))
+
+    engine.step(state, TrainAction(TrainingType.STAMINA))
+    assert state.stats.stamina == 9
+    assert state.stats.speed == 0

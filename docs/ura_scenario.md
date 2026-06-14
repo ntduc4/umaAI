@@ -23,7 +23,7 @@ Source notes:
 - GameTora Beginner Guide documents rest recovery outcomes as `30`, `50`, or `70`, with `50` being the most common outcome.
 - The Global Reference Document provides more specific rest probabilities, outing probabilities, racing energy choices, G1 race reward examples, and race-bonus examples.
 - uma.guide exposes a training simulator and its client bundle includes the URA facility level table and training formula used by this implementation.
-- GameTora support-card pages expose support effects such as friendship bonus, training effectiveness, race bonus, fan bonus, mood effect, hint levels, hint frequency, stat bonuses, initial friendship gauge, and specialty priority.
+- GameTora support-card pages expose support effects such as friendship bonus, training effectiveness, race bonus, fan bonus, mood effect, hint levels, hint frequency, stat bonuses, initial friendship gauge, and specialty priority. Example: Kitasan Black SSR (`https://gametora.com/umamusume/supports/30028-kitasan-black`) documents Specialty Priority value 20.
 - GameTora states event-helper data is manually gathered and may contain errors, so event data should be treated as sourced but not infallible.
 - Umamusume Wiki documents the URA Finale season structure as 6 extra turns, one training turn before each of three races, and the URA race win rewards currently implemented.
 
@@ -49,7 +49,7 @@ This table is the source of truth for whether the current implementation is inte
 | Motivation training values | Sourced for simulator formula | `UMA-GUIDE-BUNDLE` uses Great/Good/Normal/Bad/Terrible as `+0.2/+0.1/0/-0.1/-0.2`; name mapping to code is straightforward. |
 | Support-card training formula | Sourced from simulator | `UMA-GUIDE-BUNDLE` function `nN`; implemented for manual cards. |
 | Support-card effect fields | Sourced as data fields | `GT-SUPPORT` pages expose friendship, mood, training effectiveness, energy reduction, stat bonuses, etc. |
-| Support-card placement | `PROJECT ASSUMPTION` | Not implemented; manual cards are treated as present on every training. |
+| Support-card placement | Partially sourced | `GT-SUPPORT` and `GT-BEGINNER` document specialty priority. Placement formula uses `specialty_rate` field: matching-type supports always placed; non-matching placement probability = `specialty_rate / 100`. This formula is a `PROJECT ASSUMPTION`. |
 | Support bond gain | `PROJECT ASSUMPTION` | Code uses +7 on matching training; needs source. |
 | Friendship threshold numeric value | `PROJECT ASSUMPTION` | Code uses bond `>= 80`; source confirms orange/friendship gauge concept but not numeric threshold in fetched docs. |
 | Race schedule entries | `PROJECT ASSUMPTION` | Current race list is a scaffold and not yet sourced from a complete race database. |
@@ -417,6 +417,51 @@ Manual card data should eventually be shaped so it can be replaced by GameTora i
 - Limit break amount.
 - Passive effects at level.
 - Event chain.
+
+## Support Card Effect Audit
+
+This table tracks every support-card effect field and real-game mechanic, showing whether the engine uses it and how.
+
+### Implemented and Active Effects
+
+| Field / Mechanic | Engine Usage | Notes |
+| --- | --- | --- |
+| `training_stats` (stat bonuses) | `_calculate_training`: added to base stats before multipliers | Only placed supports contribute (see `specialty_rate` for placement rules). Works for any training type keyed in the dict. |
+| `friendship_bonus_percent` | `_calculate_training`: multiplicative when bond ≥ 80 and training matches card type | Only applied for placed supports on matching training with friendship active. Stacked multiplicatively. |
+| `mood_effect_percent` | `_calculate_training`: `mood_multiplier = 1 + mood_value * (1 + total_mood_effect_percent/100)` | Only summed from placed supports. Stacked additively. |
+| `training_effectiveness_percent` | `_calculate_training`: applied as `1 + total_percent/100` multiplier | Only summed from placed supports. Stacked additively. |
+| `energy_cost_reduction_percent` | `_calculate_training`: reduces negative energy deltas | Only summed from placed supports. Applied only when energy delta is negative. Stacked additively. |
+| `wisdom_friendship_recovery` | `_calculate_training`: added to energy delta when friendship is active on wisdom training | Only from placed supports with active friendship on wisdom. Stacked additively. |
+| `race_bonus_percent` | `_race_rewards`: multiplies race stat/SP rewards by `1 + percent/100` | Summed from all supports (not placement-filtered). Stacked additively. Applied to both win and loss rewards. |
+| `fan_bonus_percent` | `_fans_gained`: multiplies first-place fan gain by `1 + percent/100` | Summed from all supports (not placement-filtered). Stacked additively. Only applied on wins. |
+| `failure_protection_percent` | `training_fail_rate`: reduces base fail rate multiplicatively by `1 - percent/100` | Summed from all supports (not placement-filtered). Stacked additively. |
+| `initial_bond` | `SupportState.from_card`: sets starting bond gauge | |
+| `bond_gain_on_training` | `_train`: adds to bond when card type matches the training type | Default `+7` is a `PROJECT ASSUMPTION`. Bond gain applies to all matching supports regardless of placement. |
+| `card_type` | Determines bond gain matching, friendship eligibility, and per-training stat bonuses | Also determines self-type placement guarantee. |
+| `specialty_rate` | `_placed_supports`: matching-type supports always placed; non-matching placement probability = `specialty_rate / 100` | Sourced from `GT-SUPPORT` (e.g. Kitasan Black has value 20). Placement formula is `PROJECT ASSUMPTION`. |
+| Character-count multiplier | `_calculate_training`: `1 + 0.05 * support_count` applied to all stat gains | Derived from placed support count, not a card field. |
+
+### Fields with No Mechanical Effect
+
+| Field | Notes |
+| --- | --- |
+| `level` | Accepted in constructor but never read by the engine. All effects are manual user-provided values. |
+
+### Real-Game Effects Not Yet Modeled
+
+| Mechanic | Status | Notes |
+| --- | --- | --- |
+| Support placement RNG | Partially implemented | Matching-type supports always placed. Non-matching placement uses `specialty_rate / 100` probability (`PROJECT ASSUMPTION`). Full placement model (exactly one facility per support per turn) not yet implemented. |
+| Hint level / hint frequency | Not modeled | Skill hints and skill system not implemented. |
+| Support-specific events / event rate | Not modeled | Event chains and random support events not implemented. |
+| Pal / Friend card mechanics | Not modeled | Pal cards offer extra stat bonuses, special training behavior, and outings. Not in current card schema or engine. |
+| Group card mechanics | Not modeled | Group cards provide group-specific training effects. |
+| Unique skills | Not modeled | Support-card exclusive skills and their acquisition not implemented. |
+| Inspiration / spark rate | Not modeled | Sparks and inspiration system not implemented. |
+| Condition recovery (e.g., shrine condition healing) | `PROJECT ASSUMPTION` | Sourced from `GLOBAL-REF` but conditions not implemented. |
+| Motivation bonus from supports on recreation | Not implemented | Some supports boost recreation outcomes; not modeled. |
+| Support bond events / random bond gain | Not modeled | Bond gains only from matching training; no event-based bond gain. |
+| Support-card stat cap raises | Not modeled | Some supports raise stat caps beyond 1200. |
 - Skills and hint data.
 - Unique bonus unlocks.
 
