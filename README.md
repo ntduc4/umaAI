@@ -1,6 +1,6 @@
 # umaAI
 
-Python skeleton for an Umamusume career AI.
+Golang skeleton for an Umamusume career AI.
 
 Current scope:
 
@@ -14,9 +14,3 @@ Later expansion points:
 - Replace manual support-card definitions with a GameTora-backed card database.
 - Replace approximate race probability with a real race simulator.
 - Connect CV/UI detection to live game state and feed candidate actions into heuristic search.
-
-Run tests:
-
-```bash
-python -m pytest
-```

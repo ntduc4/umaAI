@@ -1,1 +1,0 @@
-"""UI element detection placeholders."""
